@@ -1,0 +1,14 @@
+.dep
+*.xml
+*zip
+*hex
+*lss
+*lst
+*map
+*elf
+*eep
+*o
+*sym
+glcd
+Nokiadisplay_datasheet
+gitignore
