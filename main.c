@@ -17,6 +17,134 @@
 #include "glcd/fonts/font5x7.h"
 #include <avr/pgmspace.h>
 #define F_CPU 16000000UL  // 1 MHz
+#define ERROR 1
+#define SUCCESS 0
+#define EEWRITE 0xA0
+#define EEREAD 0xA1
+
+//
+//avr 12c Interface-----------------------------------------------------------
+
+//initialise TWI---
+void TWIInit(void)
+{
+	//set SCL to 400kHz
+	TWSR = 0x00;
+	TWBR = 0x0C;
+	//enable TWI
+	TWCR = (1<<TWEN);
+}//-----------------
+
+
+//send start signal---
+void TWIStart(void)
+{	
+	TWCR = (1<<TWINT) | (1<<TWSTA) | (1<<TWEN);
+	while ((TWCR & (1<<TWINT)) == 0);
+}//--------------------
+
+
+//send stop signal---
+void TWIStop(void)
+{
+	TWCR = (1<<TWINT) | (1<<TWSTO) | (1<<TWEN);
+}
+
+void TWIWrite(uint8_t u8data)
+{
+	TWDR = u8data;
+	TWCR = (1<<TWINT) | (1<<TWEN);
+	while((TWCR & (1<<TWINT)) == 0);
+}//-------------------
+
+
+
+//Write status---
+uint8_t TWIReadACK(void)
+{
+	TWCR = (1<<TWINT) | (1<<TWEN) | (1<<TWEA);
+	while((TWCR & (1<<TWINT)) == 0);
+	return TWDR;
+}
+
+//reading status
+//read byte with NACK
+uint8_t TWIGetStatus(void)
+{
+	uint8_t status;
+	//mask status
+	status = TWSR & 0xF8;
+	return status;
+}
+
+
+//implement EEPROM byte write function---
+uint8_t EEWriteByte(uint16_t u16addr, uint8_t u8data)
+{
+	TWIStart();
+	if(TWIGetStatus() != 0x08)
+		return ERROR;
+		
+	//select devise and send A2 A1 A0 address bits
+	TWIWrite((EEWRITE) | ((uint8_t)((u16addr & 0x0700)>>7)));
+	if(TWIGetStatus() != 0x18)
+		return ERROR;
+		
+	//send the rest od address
+	TWIWrite((uint8_t)(u16addr));
+	if(TWIGetStatus() != 0x28)
+	{
+		return ERROR;
+	}
+	
+	//write byte to eeprom
+	TWIWrite(u8data);
+	if(TWIGetStatus() != 0x28)
+	{
+		return ERROR;
+	}
+	TWIStop();
+	return SUCCESS;
+}//---------------------------------------
+
+//implement EEPROM byte read function
+uint8_t EEReadByte(uint16_t u16addr )
+{
+	uint8_t u8data = 0;
+	TWIStart();
+	if(TWIGetStatus() != 0x08)
+	{
+		return ERROR;
+	}
+	
+	//select devise and send A2 A1 A address bits
+	TWIWrite((EEREAD)  | (uint8_t)((u16addr & 0x0700)>>7));
+	if(TWIGetStatus() != 0x18)
+	{
+		return ERROR;
+	}
+	
+	//send the rest of address
+	TWIWrite((uint8_t)(u16addr));
+	if(TWIGetStatus() != 0x28)
+	{
+		return ERROR;
+	}
+	
+	//write byte to eeprom
+	TWIWrite(u8data);
+	if(TWIGetStatus() != 0x28)
+	{
+		return ERROR;
+	}
+	TWIStop();
+	//return SUCCESS;
+	return u8data;
+}
+
+
+//--------------------------------------------------------------------------
+
 
 
 /* Function prototypes */
@@ -29,7 +157,6 @@ static void setup(void)
 }
 
 uint8_t ms, ms10,ms100,sec,min,entprell, state;
-
 
 
 
@@ -55,7 +182,7 @@ ISR (TIMER1_COMPA_vect)
 	}
 }
 
-const unsigned char bitmap[] PROGMEM= 
+/*const unsigned char bitmap[] PROGMEM= 
 { 
 	 0x3e, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 
 	 0xfe, 0xfe, 0xfc, 0xfc, 0xfc, 0xfc, 0xfc, 0xfc, 0xfc, 0xfc, 0xfc, 
@@ -103,14 +230,14 @@ const unsigned char bitmap[] PROGMEM=
 	 0x00, 0x07, 0x00, 0x00, 0x00, 0x03, 0x04, 0x04, 0x04, 0x03, 0x00, 
 	 0x07, 0x00, 0x00, 0x00, 0x07, 0x00, 0x03, 0x05, 0x05, 0x05, 0x01, 
 	 0x00, 0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
- };
-
+ };*/
+ 
+ 
 int main(void)
 {
 	
-
 	
-	/* Backlight pin PL3, set as output, set high for 100% output */
+	 //Backlight pin PL3, set as output, set high for 100% output 
 	DDRB |= (1<<PB2);
 	//PORTB |= (1<<PB2);
 	PORTB &= ~(1<<PB2);
@@ -149,9 +276,18 @@ int main(void)
 	glcd_write();
 	
 min=1;
+char string [30] = " ";
+	uint8_t variable = 224;
+
+	glcd_tiny_set_font(Font5x7, 5, 7, 32, 127);
+	glcd_clear_buffer();
+	sprintf(string, "%01d", variable);
+	glcd_draw_string_xy(10, 0, string);
+	glcd_write();
+
 	while(1) 
 	{
-		switch(2)
+		/*switch(2)
 		{
 			case 1:	glcd_test_circles();
 					break;
@@ -167,9 +303,10 @@ min=1;
 					break;
 			case 7:	glcd_test_scrolling_graph();
 					break;
-		}//end of switch
+		}//end of switch*/
 		
 	glcd_write();
+	
 	}//End of while
 	
 	return 0;
