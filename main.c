@@ -32,38 +32,38 @@ void TWIInit(void)
 	TWSR = 0x00;
 	TWBR = 0x0C;
 	//enable TWI
-	TWCR = (1<<TWEN);
+	TWCR = (1 << TWEN);
 }//-----------------
 
 
 //send start signal---
 void TWIStart(void)
 {	
-	TWCR = (1<<TWINT) | (1<<TWSTA) | (1<<TWEN);
-	while ((TWCR & (1<<TWINT)) == 0);
+	TWCR = (1 << TWINT) | (1 << TWSTA) | (1 << TWEN);
+	while ((TWCR & (1 << TWINT)) == 0);
 }//--------------------
 
 
 //send stop signal---
 void TWIStop(void)
 {
-	TWCR = (1<<TWINT) | (1<<TWSTO) | (1<<TWEN);
+	TWCR = (1 << TWINT) | (1 << TWSTO) | (1 << TWEN);
 }
 
 void TWIWrite(uint8_t u8data)
 {
 	TWDR = u8data;
-	TWCR = (1<<TWINT) | (1<<TWEN);
-	while((TWCR & (1<<TWINT)) == 0);
+	TWCR = (1 << TWINT) | (1 << TWEN);
+	while((TWCR & (1 << TWINT)) == 0);
 }//-------------------
 
 
 
 //Write status---
-uint8_t TWIReadACK(void)
+uint8_t TWIReadNACK(void)
 {
-	TWCR = (1<<TWINT) | (1<<TWEN) | (1<<TWEA);
-	while((TWCR & (1<<TWINT)) == 0);
+	TWCR = (1 << TWINT) | (1 << TWEN) | (1 << TWEA);
+	while((TWCR & (1 << TWINT)) == 0);
 	return TWDR;
 }
 
@@ -81,63 +81,83 @@ uint8_t TWIGetStatus(void)
 //implement EEPROM byte write function---
 uint8_t EEWriteByte(uint16_t u16addr, uint8_t u8data)
 {
+	uint8_t addr_1, addr_h;
+	addr_1 = u16addr;
+	addr_h = (u16addr >> 8);
+	
 	TWIStart();
 	if(TWIGetStatus() != 0x08)
 		return ERROR;
+		TWIWrite(EEWRITE);
 		
 	//select devise and send A2 A1 A0 address bits
-	TWIWrite((EEWRITE) | ((uint8_t)((u16addr & 0x0700)>>7)));
+	//TWIWrite((EEWRITE) | ((uint8_t)((u16addr & 0x0700)>>7)));
 	if(TWIGetStatus() != 0x18)
 		return ERROR;
+		TWIWrite(addr_1);
 		
 	//send the rest od address
-	TWIWrite((uint8_t)(u16addr));
 	if(TWIGetStatus() != 0x28)
 	{
 		return ERROR;
+		TWIWrite(addr_h);
 	}
 	
 	//write byte to eeprom
-	TWIWrite(u8data);
 	if(TWIGetStatus() != 0x28)
 	{
 		return ERROR;
+		TWIWrite(u8data);
 	}
-	TWIStop();
+	
+	if(TWIGetStatus() != 0x28)
+		return ERROR;
+		TWIStop();
 	return SUCCESS;
 }//---------------------------------------
 
 //implement EEPROM byte read function
 uint8_t EEReadByte(uint16_t u16addr )
 {
+
+	uint8_t addr_1, addr_h;
+	addr_1 = u16addr;
+	addr_h = (u16addr>>8);
 	uint8_t u8data = 0;
+	
 	TWIStart();
 	if(TWIGetStatus() != 0x08)
-	{
-		return ERROR;
-	}
+		return 2;
+		TWIWrite(EEWRITE);
 	
-	//select devise and send A2 A1 A address bits
-	TWIWrite((EEREAD)  | (uint8_t)((u16addr & 0x0700)>>7));
-	if(TWIGetStatus() != 0x18)
-	{
-		return ERROR;
-	}
+		//select devise and send A2 A1 A address bits
+		if(TWIGetStatus() != 0x18)
+			return 5;
+			TWIWrite(addr_1);
+		
+		//send the rest of address
+		if(TWIGetStatus() != 0x28)
+			return 5;
+			TWIWrite(addr_h);
+		
+		//write byte to eeprom
+		TWIWrite(u8data);
+		if(TWIGetStatus() != 0x28)
+			return 5;
+	TWIStart();
 	
-	//send the rest of address
-	TWIWrite((uint8_t)(u16addr));
-	if(TWIGetStatus() != 0x28)
-	{
-		return ERROR;
-	}
-	
-	//write byte to eeprom
-	TWIWrite(u8data);
-	if(TWIGetStatus() != 0x28)
-	{
-		return ERROR;
-	}
+	if(TWIGetStatus() != 0x10)
+		return 5;
+		TWIWrite(EEREAD);
+		
+		if(TWIGetStatus != 0x40)
+		return 5;
+		u8data = TWIReadNACK();
+		
+	if(TWIGetStatus() != 0x58)
+		return 7;
 	TWIStop();
+	
 	//return SUCCESS;
 	return u8data;
 }
@@ -235,6 +255,9 @@ ISR (TIMER1_COMPA_vect)
  
 int main(void)
 {
+
+	uint8_t test = 22;
+	char string [30] = " ";
 	
 	
 	 //Backlight pin PL3, set as output, set high for 100% output 
@@ -275,15 +298,24 @@ int main(void)
 	glcd_clear();
 	glcd_write();
 	
-min=1;
-char string [30] = " ";
-	uint8_t variable = 224;
+	min=1;
+	//eeprom
+	TWIInit();
+	EEWriteByte(50,80);
+	delay_ms(500);
+	test = EEReadByte(50);
+	
+	//uint8_t variable = 224;//Wert definieren
 
+	//Display
 	glcd_tiny_set_font(Font5x7, 5, 7, 32, 127);
 	glcd_clear_buffer();
-	sprintf(string, "%01d", variable);
-	glcd_draw_string_xy(10, 0, string);
-	glcd_write();
+	sprintf(string, "%d", test);
+	glcd_draw_string_xy(0, 0, string);
+	glcd_write();//Wert ausgeben
+	
+	
+
 
 	while(1) 
 	{
