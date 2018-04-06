@@ -22,9 +22,6 @@
 #define EEWRITE 0xA0
 #define EEREAD 0xA1
 
-//
-//avr 12c Interface-----------------------------------------------------------
-
 //initialise TWI---
 void TWIInit(void)
 {
@@ -57,7 +54,12 @@ void TWIWrite(uint8_t u8data)
 	while((TWCR & (1 << TWINT)) == 0);
 }//-------------------
 
-
+uint8_t TWIReadACK(void)
+{
+	TWCR = (1 << TWINT) | (1 << TWEN) | (1 << TWEA);
+	while ((TWCR & (1 << TWINT)) == 0);
+	return TWDR;
+}
 
 //Write status---
 uint8_t TWIReadNACK(void)
@@ -77,6 +79,34 @@ uint8_t TWIGetStatus(void)
 	return status;
 }
 
+//implement EEPROM byte read function
+uint8_t EEReadByte ( uint16_t u16addr ) 
+ { 
+ 	uint8_t addr_l, addr_h; 
+ 	addr_l = u16addr; 
+ 	addr_h = (u16addr>>8); 
+ 	uint8_t u8data = 0; 
+	 
+      
+    TWIStart();
+ 
+ 	TWIWrite(EEWRITE); 
+ 	TWIWrite(addr_l); 
+ 	TWIWrite(addr_h);
+ 
+    TWIStart(); 
+	
+ 	TWIWrite(EEREAD); 
+ 	u8data = TWIReadNACK(); 
+	
+    TWIStop(); 
+	
+ 	delay_ms(10); 
+ 	 
+     return u8data; 
+
+}
+
 
 //implement EEPROM byte write function---
 uint8_t EEWriteByte(uint16_t u16addr, uint8_t u8data)
@@ -87,80 +117,47 @@ uint8_t EEWriteByte(uint16_t u16addr, uint8_t u8data)
 	
 	TWIStart();
 	if(TWIGetStatus() != 0x08)
+	{
 		return ERROR;
-		TWIWrite(EEWRITE);
-		
+	}
+	
+	TWIWrite(EEWRITE);
+	
 	//select devise and send A2 A1 A0 address bits
 	//TWIWrite((EEWRITE) | ((uint8_t)((u16addr & 0x0700)>>7)));
 	if(TWIGetStatus() != 0x18)
+	{
 		return ERROR;
-		TWIWrite(addr_1);
-		
+	}
+	
+	TWIWrite(addr_1);
+	
 	//send the rest od address
 	if(TWIGetStatus() != 0x28)
 	{
 		return ERROR;
-		TWIWrite(addr_h);
 	}
+	
+	TWIWrite(addr_h);
 	
 	//write byte to eeprom
 	if(TWIGetStatus() != 0x28)
 	{
-		return ERROR;
-		TWIWrite(u8data);
+		return ERROR;	
 	}
 	
+	TWIWrite(u8data);
+	
 	if(TWIGetStatus() != 0x28)
-		return ERROR;
-		TWIStop();
+	{
+		return ERROR;	
+	}
+	
+	TWIStop();
 	return SUCCESS;
 }//---------------------------------------
 
-//implement EEPROM byte read function
-uint8_t EEReadByte(uint16_t u16addr )
-{
 
-	uint8_t addr_1, addr_h;
-	addr_1 = u16addr;
-	addr_h = (u16addr>>8);
-	uint8_t u8data = 0;
-	
-	TWIStart();
-	if(TWIGetStatus() != 0x08)
-		return 2;
-		TWIWrite(EEWRITE);
-	
-		//select devise and send A2 A1 A address bits
-		if(TWIGetStatus() != 0x18)
-			return 5;
-			TWIWrite(addr_1);
-		
-		//send the rest of address
-		if(TWIGetStatus() != 0x28)
-			return 5;
-			TWIWrite(addr_h);
-		
-		//write byte to eeprom
-		TWIWrite(u8data);
-		if(TWIGetStatus() != 0x28)
-			return 5;
-	TWIStart();
-	
-	if(TWIGetStatus() != 0x10)
-		return 5;
-		TWIWrite(EEREAD);
-		
-		if(TWIGetStatus != 0x40)
-		return 5;
-		u8data = TWIReadNACK();
-		
-	if(TWIGetStatus() != 0x58)
-		return 7;
-	TWIStop();
-	
-	//return SUCCESS;
-	return u8data;
-}
 
 
 //--------------------------------------------------------------------------
@@ -302,7 +299,7 @@ int main(void)
 	//eeprom
 	TWIInit();
 	EEWriteByte(50,80);
-	delay_ms(500);
+	delay_ms(100);
 	test = EEReadByte(50);
 	
 	//uint8_t variable = 224;//Wert definieren
